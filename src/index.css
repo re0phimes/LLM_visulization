@@ -1,1 +1,26 @@
 @import "tailwindcss";
+
+@keyframes flowDots {
+  0% { transform: translate(0, 0); }
+  100% { transform: translate(-40px, -40px); }
+}
+
+body {
+  background-color: #f9fafb;
+  position: relative;
+  overflow-x: hidden;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  top: -40px;
+  left: -40px;
+  right: 0;
+  bottom: 0;
+  background-image: radial-gradient(circle, rgba(99,102,241,0.25) 1px, transparent 1px);
+  background-size: 40px 40px;
+  animation: flowDots 8s linear infinite;
+  pointer-events: none;
+  z-index: -1;
+}

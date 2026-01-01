@@ -89,37 +89,76 @@ const Operator = ({ symbol, vertical = false }) => (
   </div>
 );
 
-// 带深浅色区分的 Scores 矩阵（展示 KV Cache 效果）
-const ScoresWithCache = ({ oldRows, oldCols, label, subLabel }) => {
-  const renderCell = (r, c, isNew) => (
-    <motion.div
-      key={`${r}-${c}`}
-      initial={{ scale: 0.8, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
-      transition={{ delay: (r * (oldCols + 1) + c) * 0.002 }}
-      className={`w-3 h-3 sm:w-4 sm:h-4 rounded-[1px] border border-amber-200 ${isNew ? 'bg-amber-500' : 'bg-amber-200'}`}
-    />
+// 带 Causal Mask 的 Scores 矩阵（下三角有效，右上角 masked）
+const ScoresWithMask = ({ size, label, subLabel, showNew = false, newCount = 1 }) => {
+  return (
+    <div className="flex flex-col items-center gap-1 mx-1">
+      <div className="text-[10px] font-mono text-gray-500 bg-gray-100 px-1.5 rounded mb-1">
+        [{size}, {size}]
+      </div>
+      <div className="relative p-1 bg-white rounded shadow-sm border border-gray-100">
+        <div className="flex flex-col gap-[1px]">
+          {Array.from({ length: size }).map((_, r) => (
+            <div key={r} className="flex gap-[1px]">
+              {Array.from({ length: size }).map((_, c) => {
+                const isMasked = c > r;
+                const isNew = showNew && (r >= size - newCount || c >= size - newCount);
+                return (
+                  <motion.div
+                    key={c}
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ delay: (r * size + c) * 0.002 }}
+                    className={`w-3 h-3 sm:w-4 sm:h-4 rounded-[1px] ${isMasked ? 'border border-dashed border-gray-600' : 'border border-solid border-amber-300'} ${isNew ? 'bg-amber-500' : 'bg-amber-200'}`}
+                  />
+                );
+              })}
+            </div>
+          ))}
+        </div>
+        <div className="absolute -right-1 -top-1 bg-gray-500 text-white text-[8px] px-1 rounded">mask</div>
+      </div>
+      <div className="text-center mt-1">
+        <div className="text-xs font-bold text-amber-600">{label}</div>
+        {subLabel && <div className="text-[9px] text-gray-400 font-mono leading-tight">{subLabel}</div>}
+      </div>
+    </div>
   );
+};
+
+// 带深浅色区分的 Scores 矩阵（展示 KV Cache 效果 + Causal Mask）
+const ScoresWithCache = ({ oldRows, oldCols, label, subLabel }) => {
+  const totalRows = oldRows + 1;
+  const totalCols = oldCols + 1;
+  
+  const renderCell = (r, c) => {
+    const isMasked = c > r;
+    const isNew = r >= oldRows || c >= oldCols;
+    return (
+      <motion.div
+        key={`${r}-${c}`}
+        initial={{ scale: 0.8, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ delay: (r * totalCols + c) * 0.002 }}
+        className={`w-3 h-3 sm:w-4 sm:h-4 rounded-[1px] ${isMasked ? 'border border-dashed border-gray-400 bg-transparent' : isNew ? 'border border-amber-300 bg-amber-500' : 'border border-amber-200 bg-amber-200'}`}
+      />
+    );
+  };
 
   return (
     <div className="flex flex-col items-center gap-1 mx-1">
       <div className="text-[10px] font-mono text-gray-500 bg-gray-100 px-1.5 rounded mb-1">
-        [{oldRows + 1}, {oldCols + 1}]
+        [{totalRows}, {totalCols}]
       </div>
       <div className="relative p-1 bg-white rounded shadow-sm border border-gray-100">
         <div className="flex flex-col gap-[1px]">
-          {/* 原有的 L 行 */}
-          {Array.from({ length: oldRows }).map((_, r) => (
+          {Array.from({ length: totalRows }).map((_, r) => (
             <div key={r} className="flex gap-[1px]">
-              {Array.from({ length: oldCols }).map((_, c) => renderCell(r, c, false))}
-              {renderCell(r, oldCols, true)} {/* 新增的列 */}
+              {Array.from({ length: totalCols }).map((_, c) => renderCell(r, c))}
             </div>
           ))}
-          {/* 新增的行 */}
-          <div className="flex gap-[1px]">
-            {Array.from({ length: oldCols + 1 }).map((_, c) => renderCell(oldRows, c, true))}
-          </div>
         </div>
+        <div className="absolute -right-1 -top-1 bg-gray-500 text-white text-[8px] px-1 rounded">mask</div>
       </div>
       <div className="text-center mt-1">
         <div className="text-xs font-bold text-amber-600">{label}</div>
@@ -301,12 +340,9 @@ const TokenInput = ({ tokens, cols, color = "gray", label, subLabel, active = fa
   );
 };
 
-const SectionLabel = ({ icon: Icon, title, color }) => (
-  <div className={`flex items-center gap-2 mb-4 pb-2 border-b ${color === 'indigo' ? 'border-indigo-100 text-indigo-900' : 'border-amber-100 text-amber-900'}`}>
-    <div className={`p-1.5 rounded-md ${color === 'indigo' ? 'bg-indigo-100 text-indigo-600' : 'bg-amber-100 text-amber-600'}`}>
-      <Icon size={18} />
-    </div>
-    <h3 className="font-bold text-sm uppercase tracking-wide">{title}</h3>
+const SectionLabel = ({ title, color }) => (
+  <div className={`mb-4 pb-2 border-b ${color === 'indigo' ? 'border-indigo-200 text-indigo-900' : color === 'amber' ? 'border-amber-200 text-amber-900' : 'border-red-200 text-red-900'}`}>
+    <h3 className="font-bold text-base">{title}</h3>
   </div>
 );
 
@@ -323,8 +359,8 @@ const StaticFlow = () => {
     <div className="w-full mx-auto space-y-8">
       
       {/* 1. PREFILL STAGE */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-indigo-100">
-        <SectionLabel icon={Layers} title="Phase 1: Prefill (Context Processing)" color="indigo" />
+      <div className="bg-white/50 p-6 rounded-xl shadow-sm border border-indigo-200">
+        <SectionLabel title="Phase 1: Prefill (Context Processing)" color="indigo" />
         
         {/* 标注多头信息 */}
         <div className="flex justify-center mb-4">
@@ -373,7 +409,7 @@ const StaticFlow = () => {
           <Operator symbol="×" />
           <BlockGrid rows={D_K} cols={SEQ} color="blue" label="Kⁱᵀ" subLabel={`[${D_K}, L]`} active transposed />
           <Operator symbol="=" />
-          <BlockGrid rows={SEQ} cols={SEQ} color="yellow" label="Scoresⁱ" subLabel="[L, L]" active />
+          <ScoresWithMask size={SEQ} label="Scoresⁱ" subLabel="[L, L]" />
           <Operator symbol="×" />
           <BlockGrid rows={SEQ} cols={D_K} color="green" label="Vⁱ" subLabel={`[L, ${D_K}]`} active />
           <Operator symbol="=" />
@@ -410,8 +446,8 @@ const StaticFlow = () => {
       </div>
 
       {/* 2. DECODING STAGE */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-amber-100">
-        <SectionLabel icon={Cpu} title="Phase 2: Decoding (Token Generation)" color="amber" />
+      <div className="bg-white/50 p-6 rounded-xl shadow-sm border border-amber-200">
+        <SectionLabel title="Phase 2: Decoding (Token Generation)" color="amber" />
 
         <div className="flex items-center justify-center gap-3 overflow-x-auto pb-4 flex-nowrap">
           {/* Input x */}
@@ -499,16 +535,8 @@ const StaticFlow = () => {
       </div>
 
       {/* 3. WITHOUT KV CACHE - 完整流程对比 */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-red-100">
-        <div className="flex items-center gap-2 mb-4 pb-2 border-b border-red-100">
-          <div className="p-1.5 rounded-md bg-red-100 text-red-600">
-            <Cpu size={18} />
-          </div>
-          <h3 className="font-bold text-sm uppercase tracking-wide text-red-900">Phase 3: Without KV Cache (每次重算全部)</h3>
-          <div className="ml-auto bg-red-100 text-red-700 text-[10px] px-2 py-0.5 rounded-full font-bold">
-            低效方案
-          </div>
-        </div>
+      <div className="bg-white/50 p-6 rounded-xl shadow-sm border border-red-200">
+        <SectionLabel title="Phase 3: Without KV Cache (每次重算全部)" color="red" />
 
         <div className="flex items-center justify-center gap-3 overflow-x-auto pb-4 flex-nowrap">
           {/* 完整输入 - 最后一行高亮 */}
@@ -544,7 +572,7 @@ const StaticFlow = () => {
           <Operator symbol="×" />
           <BlockGridWithHighlight rows={D_K} cols={SEQ+1} color="blue" label="Kⁱᵀ" subLabel={`[${D_K}, L+1]`} highlightLastRow={false} highlightLastCol />
           <Operator symbol="=" />
-          <ScoresWithCache oldRows={SEQ} oldCols={SEQ} label="Scoresⁱ" subLabel="[L+1, L+1]" />
+          <ScoresWithMask size={SEQ+1} label="Scoresⁱ" subLabel="[L+1, L+1]" showNew />
           <Operator symbol="×" />
           <BlockGridWithHighlight rows={SEQ+1} cols={D_K} color="green" label="Vⁱ" subLabel={`[L+1, ${D_K}]`} />
           <Operator symbol="=" />
@@ -600,7 +628,7 @@ const StepCard = ({ title, description, children }) => (
   <motion.div 
     initial={{ opacity: 0, y: 10 }}
     animate={{ opacity: 1, y: 0 }}
-    className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 w-full max-w-4xl min-h-[400px] flex flex-col"
+    className="bg-white/50 rounded-xl shadow-sm border border-gray-200 p-6 w-full max-w-6xl min-h-[400px] flex flex-col"
   >
     <div className="mb-6 border-b border-gray-100 pb-4">
       <h3 className="text-lg font-bold text-gray-800">{title}</h3>
@@ -618,40 +646,98 @@ export default function BlockVisualizer() {
   const [mode, setMode] = useState('compare'); // 'compare' | 'prefill' | 'decoding'
   const [step, setStep] = useState(0);
 
-  // Constants
-  const SEQ_LEN = 6;
-  const HIDDEN_DIM = 4;
-  const CACHE_LEN = 6;
+  // Constants - 与 StaticFlow 保持一致
+  const PREFILL_TOKENS = ['我', '爱', '机器', '学习'];
+  const DECODE_TOKEN = '！';
+  const SEQ = PREFILL_TOKENS.length;
+  const D_K = 3;
+  const D_MODEL = 6;
+  const N_HEADS = 2;
 
   const prefillSteps = [
     {
-      title: "1. 输入嵌入 (Embedding)",
-      desc: "输入是一个完整的序列矩阵。维度为 [Sequence_Length, Hidden_Dim]。",
+      title: "1. 输入嵌入 (Input Embedding)",
+      desc: `输入序列 "${PREFILL_TOKENS.join('')}" 转换为嵌入矩阵 [L=${SEQ}, D_model=${D_MODEL}]`,
       render: () => (
-        <BlockGrid rows={SEQ_LEN} cols={HIDDEN_DIM} color="gray" label="Input X" active />
+        <TokenInput tokens={PREFILL_TOKENS} cols={D_MODEL} label="Input X" subLabel={`[${SEQ}, ${D_MODEL}]`} active />
       )
     },
     {
-      title: "2. 生成 Q, K, V",
-      desc: "输入矩阵分别投影生成三个相同形状的矩阵。",
+      title: "2. 线性投影 (Linear Projection)",
+      desc: `Input X 分别乘以 Wq、Wk、Wv 得到 Q、K、V。每个头的维度为 D_k=${D_K}`,
       render: () => (
-        <div className="flex gap-8">
-           <BlockGrid rows={SEQ_LEN} cols={HIDDEN_DIM} color="red" label="Q" active />
-           <BlockGrid rows={SEQ_LEN} cols={HIDDEN_DIM} color="blue" label="K" active />
-           <BlockGrid rows={SEQ_LEN} cols={HIDDEN_DIM} color="green" label="V" active />
+        <div className="flex items-center gap-3">
+          <TokenInput tokens={PREFILL_TOKENS} cols={D_MODEL} label="Input X" subLabel={`[${SEQ}, ${D_MODEL}]`} active />
+          <Operator symbol="×" />
+          <div className="relative flex flex-col gap-3 p-3 pt-6 bg-gray-50 rounded-lg border border-gray-200 mt-3 overflow-visible">
+            <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-gray-500 text-white text-[9px] px-2 py-0.5 rounded-full font-bold whitespace-nowrap z-10">Head i (i=1..{N_HEADS})</div>
+            <div className="p-1.5 bg-rose-50 rounded border border-rose-200">
+              <BlockGrid rows={D_MODEL} cols={D_K} color="red" label="Wqⁱ" subLabel={`[${D_MODEL}, ${D_K}]`} active />
+            </div>
+            <div className="p-1.5 bg-sky-50 rounded border border-sky-200">
+              <BlockGrid rows={D_MODEL} cols={D_K} color="blue" label="Wkⁱ" subLabel={`[${D_MODEL}, ${D_K}]`} active />
+            </div>
+            <div className="p-1.5 bg-emerald-50 rounded border border-emerald-200">
+              <BlockGrid rows={D_MODEL} cols={D_K} color="green" label="Wvⁱ" subLabel={`[${D_MODEL}, ${D_K}]`} active />
+            </div>
+          </div>
+          <Operator symbol="=" />
+          <div className="flex flex-col gap-4">
+            <BlockGrid rows={SEQ} cols={D_K} color="red" label="Qⁱ" subLabel={`[${SEQ}, ${D_K}]`} active />
+            <div className="relative p-2 pt-4 rounded-lg border-2 border-dashed border-blue-300 bg-blue-50/50">
+              <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-blue-100 text-blue-700 text-[9px] px-1.5 rounded font-bold">Cache</div>
+              <BlockGrid rows={SEQ} cols={D_K} color="blue" label="Kⁱ" subLabel={`[${SEQ}, ${D_K}]`} active />
+            </div>
+            <div className="relative p-2 pt-4 rounded-lg border-2 border-dashed border-green-300 bg-green-50/50">
+              <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-green-100 text-green-700 text-[9px] px-1.5 rounded font-bold">Cache</div>
+              <BlockGrid rows={SEQ} cols={D_K} color="green" label="Vⁱ" subLabel={`[${SEQ}, ${D_K}]`} active />
+            </div>
+          </div>
         </div>
       )
     },
     {
-      title: "3. 自注意力 (Self-Attention)",
-      desc: "Q 乘以 K 的转置。生成一个 [L, L] 的方阵。这就是 Prefill 计算量大的原因。",
+      title: "3. 注意力分数 (Attention Scores)",
+      desc: `Q × K^T 得到 [${SEQ}, ${SEQ}] 的注意力分数矩阵。这是 Prefill 计算量大的原因。`,
       render: () => (
         <div className="flex items-center gap-2">
-          <BlockGrid rows={SEQ_LEN} cols={HIDDEN_DIM} color="red" label="Q" active />
+          <BlockGrid rows={SEQ} cols={D_K} color="red" label="Qⁱ" subLabel={`[${SEQ}, ${D_K}]`} active />
           <Operator symbol="×" />
-          <BlockGrid rows={HIDDEN_DIM} cols={SEQ_LEN} color="blue" label="K^T" active transposed />
+          <BlockGrid rows={D_K} cols={SEQ} color="blue" label="Kⁱᵀ" subLabel={`[${D_K}, ${SEQ}]`} active />
           <Operator symbol="=" />
-          <BlockGrid rows={SEQ_LEN} cols={SEQ_LEN} color="yellow" label="Score Matrix" subLabel="[L, L] Square" active />
+          <ScoresWithMask size={SEQ} label="Scoresⁱ" subLabel={`[${SEQ}, ${SEQ}]`} />
+        </div>
+      )
+    },
+    {
+      title: "4. 加权求和 (Weighted Sum)",
+      desc: "Softmax(Scores) × V 得到每个头的输出",
+      render: () => (
+        <div className="flex items-center gap-2">
+          <ScoresWithMask size={SEQ} label="Scoresⁱ" subLabel={`[${SEQ}, ${SEQ}]`} />
+          <Operator symbol="×" />
+          <BlockGrid rows={SEQ} cols={D_K} color="green" label="Vⁱ" subLabel={`[${SEQ}, ${D_K}]`} active />
+          <Operator symbol="=" />
+          <BlockGrid rows={SEQ} cols={D_K} color="purple" label="Headⁱ" subLabel={`[${SEQ}, ${D_K}]`} highlightLastRow active />
+        </div>
+      )
+    },
+    {
+      title: "5. 多头拼接 + 输出投影 (Concat + Output Projection)",
+      desc: `${N_HEADS} 个头拼接后通过 Wo 投影回 D_model=${D_MODEL}`,
+      render: () => (
+        <div className="flex items-center gap-2">
+          <div className="relative flex gap-1 p-2 pt-4 bg-purple-50 rounded-lg border border-purple-200">
+            <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-purple-500 text-white text-[9px] px-2 py-0.5 rounded-full font-bold whitespace-nowrap">Concat {N_HEADS} heads</div>
+            <BlockGrid rows={SEQ} cols={D_K} color="purple" label="H1" subLabel="" active />
+            <BlockGrid rows={SEQ} cols={D_K} color="purple" label="H2" subLabel="" active />
+          </div>
+          <Operator symbol="×" />
+          <div className="p-1.5 bg-gray-100 rounded border border-gray-300">
+            <BlockGrid rows={D_MODEL} cols={D_MODEL} color="gray" label="Wo" subLabel={`[${D_MODEL}, ${D_MODEL}]`} active />
+          </div>
+          <Operator symbol="=" />
+          <BlockGrid rows={SEQ} cols={D_MODEL} color="purple" label="Output" subLabel={`[${SEQ}, ${D_MODEL}]`} highlightLastRow active />
         </div>
       )
     }
@@ -659,41 +745,89 @@ export default function BlockVisualizer() {
 
   const decodingSteps = [
     {
-      title: "1. 单点输入",
-      desc: "Decoding 阶段，输入只是刚刚生成的 1 个 Token。",
+      title: "1. 单 Token 输入",
+      desc: `Decoding 阶段只输入新生成的 1 个 Token "${DECODE_TOKEN}"`,
       render: () => (
-        <BlockGrid rows={1} cols={HIDDEN_DIM} color="gray" label="Input x" subLabel="[1, D]" active />
+        <TokenInput tokens={[DECODE_TOKEN]} cols={D_MODEL} label="x_new" subLabel={`[1, ${D_MODEL}]`} active />
       )
     },
     {
-      title: "2. 拼接 KV Cache",
-      desc: "新生成的 k, v (1行) 被拼接到历史 Cache (L行) 的末尾。",
+      title: "2. 线性投影 + KV Cache",
+      desc: "新 token 投影得到 q, k, v，k 和 v 追加到 Cache",
       render: () => (
-        <div className="flex items-center gap-4">
-           <div className="flex flex-col items-center opacity-50">
-             <BlockGrid rows={CACHE_LEN} cols={HIDDEN_DIM} color="blue" label="Old Cache" />
-           </div>
-           <Plus className="text-gray-400" />
-           <BlockGrid rows={1} cols={HIDDEN_DIM} color="blue" label="New k" active />
-           <ArrowRight className="text-gray-400" />
-           <div className="flex flex-col gap-[1px]">
-                <BlockGrid rows={CACHE_LEN} cols={HIDDEN_DIM} color="blue" label="" />
-                <BlockGrid rows={1} cols={HIDDEN_DIM} color="blue" label="" active />
-                <div className="text-xs font-bold text-blue-600 mt-1 text-center">New Cache</div>
-           </div>
+        <div className="flex items-center gap-3">
+          <TokenInput tokens={[DECODE_TOKEN]} cols={D_MODEL} label="x_new" subLabel={`[1, ${D_MODEL}]`} active />
+          <Operator symbol="×" />
+          <div className="relative flex flex-col gap-3 p-3 pt-6 bg-gray-50 rounded-lg border border-gray-200 mt-3 overflow-visible">
+            <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-gray-500 text-white text-[9px] px-2 py-0.5 rounded-full font-bold whitespace-nowrap z-10">Head i</div>
+            <div className="p-1.5 bg-rose-50 rounded border border-rose-200">
+              <BlockGrid rows={D_MODEL} cols={D_K} color="red" label="Wqⁱ" subLabel="" active />
+            </div>
+            <div className="p-1.5 bg-sky-50 rounded border border-sky-200">
+              <BlockGrid rows={D_MODEL} cols={D_K} color="blue" label="Wkⁱ" subLabel="" active />
+            </div>
+            <div className="p-1.5 bg-emerald-50 rounded border border-emerald-200">
+              <BlockGrid rows={D_MODEL} cols={D_K} color="green" label="Wvⁱ" subLabel="" active />
+            </div>
+          </div>
+          <Operator symbol="=" />
+          <div className="relative flex flex-col gap-3 p-3 pt-5 bg-amber-50/50 rounded-lg border border-amber-200">
+            <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-amber-500 text-white text-[9px] px-2 py-0.5 rounded-full font-bold whitespace-nowrap">New</div>
+            <BlockGrid rows={1} cols={D_K} color="red" label="qⁱ" subLabel={`[1, ${D_K}]`} active />
+            <BlockGrid rows={1} cols={D_K} color="blue" label="kⁱ" subLabel={`[1, ${D_K}]`} active />
+            <BlockGrid rows={1} cols={D_K} color="green" label="vⁱ" subLabel={`[1, ${D_K}]`} active />
+          </div>
+          <Operator symbol="+" />
+          <div className="relative flex flex-col gap-3 p-3 pt-5 bg-indigo-50/50 rounded-lg border border-indigo-200">
+            <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-indigo-500 text-white text-[9px] px-2 py-0.5 rounded-full font-bold whitespace-nowrap">from Prefill</div>
+            <div className="opacity-50"><BlockGrid rows={SEQ} cols={D_K} color="blue" label="Kⁱ_cache" subLabel={`[${SEQ}, ${D_K}]`} /></div>
+            <div className="opacity-50"><BlockGrid rows={SEQ} cols={D_K} color="green" label="Vⁱ_cache" subLabel={`[${SEQ}, ${D_K}]`} /></div>
+          </div>
         </div>
       )
     },
     {
-      title: "3. 注意力计算 (Vector)",
-      desc: "新 Token (q) 查询整个 Cache。结果是一个扁平的向量 [1, L+1]。",
+      title: "3. 注意力计算",
+      desc: `q × K_cache^T 得到 [1, ${SEQ+1}] 的注意力向量（不是方阵！）`,
       render: () => (
         <div className="flex items-center gap-2">
-            <BlockGrid rows={1} cols={HIDDEN_DIM} color="red" label="q_new" active />
-            <Operator symbol="×" />
-            <BlockGrid rows={HIDDEN_DIM} cols={CACHE_LEN + 1} color="blue" label="K_Cache^T" active transposed />
-            <Operator symbol="=" />
-            <BlockGrid rows={1} cols={CACHE_LEN + 1} color="yellow" label="Scores" subLabel="[1, L+1] Vector" active />
+          <BlockGrid rows={1} cols={D_K} color="red" label="qⁱ" subLabel={`[1, ${D_K}]`} active />
+          <Operator symbol="×" />
+          <HConcatGrid rows={D_K} colsOld={SEQ} colsNew={1} color="blue" label="Kⁱᵀ" subLabel={`[${D_K}, ${SEQ+1}]`} />
+          <Operator symbol="=" />
+          <BlockGrid rows={1} cols={SEQ + 1} color="yellow" label="Scoresⁱ" subLabel={`[1, ${SEQ+1}]`} active />
+        </div>
+      )
+    },
+    {
+      title: "4. 加权求和",
+      desc: "Scores × V_cache 得到单个输出向量",
+      render: () => (
+        <div className="flex items-center gap-2">
+          <BlockGrid rows={1} cols={SEQ + 1} color="yellow" label="Scoresⁱ" subLabel={`[1, ${SEQ+1}]`} active />
+          <Operator symbol="×" />
+          <VConcatGrid rowsOld={SEQ} rowsNew={1} cols={D_K} color="green" label="Vⁱ" subLabel={`[${SEQ+1}, ${D_K}]`} />
+          <Operator symbol="=" />
+          <BlockGrid rows={1} cols={D_K} color="purple" label="Headⁱ" subLabel={`[1, ${D_K}]`} active />
+        </div>
+      )
+    },
+    {
+      title: "5. 多头拼接 + 输出投影",
+      desc: `${N_HEADS} 个头拼接后通过 Wo 投影，输出下一个 token 的表示`,
+      render: () => (
+        <div className="flex items-center gap-2">
+          <div className="relative flex gap-1 p-2 pt-4 bg-purple-50 rounded-lg border border-purple-200">
+            <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-purple-500 text-white text-[9px] px-2 py-0.5 rounded-full font-bold whitespace-nowrap">Concat</div>
+            <BlockGrid rows={1} cols={D_K} color="purple" label="H1" subLabel="" active />
+            <BlockGrid rows={1} cols={D_K} color="purple" label="H2" subLabel="" active />
+          </div>
+          <Operator symbol="×" />
+          <div className="p-1.5 bg-gray-100 rounded border border-gray-300">
+            <BlockGrid rows={D_MODEL} cols={D_MODEL} color="gray" label="Wo" subLabel={`[${D_MODEL}, ${D_MODEL}]`} active />
+          </div>
+          <Operator symbol="=" />
+          <BlockGrid rows={1} cols={D_MODEL} color="purple" label="Output" subLabel={`[1, ${D_MODEL}]`} active />
         </div>
       )
     }
@@ -702,7 +836,7 @@ export default function BlockVisualizer() {
   const currentSteps = mode === 'prefill' ? prefillSteps : decodingSteps;
 
   return (
-    <div className="min-h-screen bg-gray-50 font-sans px-4 py-6">
+    <div className="min-h-screen font-sans px-4 py-6">
       <div className="w-full max-w-[1800px] mx-auto">
         
         {/* Header */}
