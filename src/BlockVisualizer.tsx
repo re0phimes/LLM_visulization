@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowRight, ArrowDown, Play, SkipForward, Layers, Cpu, CheckCircle2, Plus, Database } from 'lucide-react';
+import { ArrowRight, ArrowDown, Play, SkipForward, Layers, Cpu, CheckCircle2, Plus, Database, Pause } from 'lucide-react';
 
 // --- Components ---
 
@@ -88,6 +88,43 @@ const Operator = ({ symbol, vertical = false }) => (
     {symbol}
   </div>
 );
+
+// 纯 Causal Mask 矩阵（显示 0 和 -∞）
+const CausalMaskGrid = ({ size, label, subLabel }) => {
+  return (
+    <div className="flex flex-col items-center gap-1 mx-1">
+      <div className="text-[10px] font-mono text-gray-500 bg-gray-100 px-1.5 rounded mb-1">
+        [{size}, {size}]
+      </div>
+      <div className="relative p-1 bg-white rounded shadow-sm border border-gray-100">
+        <div className="flex flex-col gap-[1px]">
+          {Array.from({ length: size }).map((_, r) => (
+            <div key={r} className="flex gap-[1px]">
+              {Array.from({ length: size }).map((_, c) => {
+                const isMasked = c > r;
+                return (
+                  <motion.div
+                    key={c}
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ delay: (r * size + c) * 0.002 }}
+                    className={`w-4 h-4 sm:w-5 sm:h-5 rounded-[1px] flex items-center justify-center text-[8px] font-bold ${isMasked ? 'bg-red-100 border border-red-300 text-red-600' : 'bg-green-100 border border-green-300 text-green-600'}`}
+                  >
+                    {isMasked ? '-∞' : '0'}
+                  </motion.div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="text-center mt-1">
+        <div className="text-xs font-bold text-gray-600">{label}</div>
+        {subLabel && <div className="text-[9px] text-gray-400 font-mono leading-tight">{subLabel}</div>}
+      </div>
+    </div>
+  );
+};
 
 // 带 Causal Mask 的 Scores 矩阵（下三角有效，右上角 masked）
 const ScoresWithMask = ({ size, label, subLabel, showNew = false, newCount = 1 }) => {
@@ -340,14 +377,22 @@ const TokenInput = ({ tokens, cols, color = "gray", label, subLabel, active = fa
   );
 };
 
-const SectionLabel = ({ title, color }) => (
-  <div className={`mb-4 pb-2 border-b ${color === 'indigo' ? 'border-indigo-200 text-indigo-900' : color === 'amber' ? 'border-amber-200 text-amber-900' : 'border-red-200 text-red-900'}`}>
+const SectionLabel = ({ title, color, onDetail }) => (
+  <div className={`flex items-center justify-between mb-4 pb-2 border-b ${color === 'indigo' ? 'border-indigo-200 text-indigo-900' : color === 'amber' ? 'border-amber-200 text-amber-900' : 'border-red-200 text-red-900'}`}>
     <h3 className="font-bold text-base">{title}</h3>
+    {onDetail && (
+      <button 
+        onClick={onDetail}
+        className={`text-xs px-3 py-1 rounded-full font-medium transition-all hover:scale-105 ${color === 'indigo' ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200' : color === 'amber' ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}
+      >
+        查看细节 →
+      </button>
+    )}
   </div>
 );
 
 // --- Main Static Flow Component ---
-const StaticFlow = () => {
+const StaticFlow = ({ phase, onShowPrefillDetail, onShowDecodingDetail, onShowNocacheDetail }) => {
   const PREFILL_TOKENS = ['我', '爱', '机器', '学习'];
   const DECODE_TOKEN = '！';
   const SEQ = PREFILL_TOKENS.length;
@@ -356,11 +401,12 @@ const StaticFlow = () => {
   const N_HEADS = 2; // 头数 (D_MODEL / D_K)
   
   return (
-    <div className="w-full mx-auto space-y-8">
+    <div className="w-full mx-auto">
       
       {/* 1. PREFILL STAGE */}
+      {phase === 1 && (
       <div className="bg-white/50 p-6 rounded-xl shadow-sm border border-indigo-200">
-        <SectionLabel title="Phase 1: Prefill (Context Processing)" color="indigo" />
+        <SectionLabel title="Phase 1: Prefill (Context Processing)" color="indigo" onDetail={onShowPrefillDetail} />
         
         {/* 标注多头信息 */}
         <div className="flex justify-center mb-4">
@@ -435,19 +481,12 @@ const StaticFlow = () => {
           每个头独立计算 Attention，然后 Concat 拼接，通过 Wo 投影回 D_model。Output 的<span className="font-bold text-yellow-600">最后一行</span>用于预测下一个 Token。
         </p>
       </div>
-
-      {/* TRANSITION ARROW */}
-      <div className="flex justify-center -my-4 relative z-10">
-        <div className="bg-blue-600 text-white px-4 py-1.5 rounded-full text-xs font-bold flex items-center gap-2 shadow-md">
-            <Database size={14} />
-            KV Cache Handover
-            <ArrowDown size={14} />
-        </div>
-      </div>
+      )}
 
       {/* 2. DECODING STAGE */}
+      {phase === 2 && (
       <div className="bg-white/50 p-6 rounded-xl shadow-sm border border-amber-200">
-        <SectionLabel title="Phase 2: Decoding (Token Generation)" color="amber" />
+        <SectionLabel title="Phase 2: Decoding (Token Generation)" color="amber" onDetail={onShowDecodingDetail} />
 
         <div className="flex items-center justify-center gap-3 overflow-x-auto pb-4 flex-nowrap">
           {/* Input x */}
@@ -524,19 +563,12 @@ const StaticFlow = () => {
           维度闭环: Input [{D_MODEL}] → Concat [{N_HEADS}×{D_K}] × Wo → Output [{D_MODEL}]
         </p>
       </div>
-
-      {/* TRANSITION ARROW */}
-      <div className="flex justify-center -my-4 relative z-10">
-        <div className="bg-emerald-600 text-white px-4 py-1.5 rounded-full text-xs font-bold flex items-center gap-2 shadow-md">
-            <Plus size={14} />
-            Append to Sequence
-            <ArrowDown size={14} />
-        </div>
-      </div>
+      )}
 
       {/* 3. WITHOUT KV CACHE - 完整流程对比 */}
+      {phase === 3 && (
       <div className="bg-white/50 p-6 rounded-xl shadow-sm border border-red-200">
-        <SectionLabel title="Phase 3: Without KV Cache (每次重算全部)" color="red" />
+        <SectionLabel title="Phase 3: Without KV Cache (每次重算全部)" color="red" onDetail={onShowNocacheDetail} />
 
         <div className="flex items-center justify-center gap-3 overflow-x-auto pb-4 flex-nowrap">
           {/* 完整输入 - 最后一行高亮 */}
@@ -601,9 +633,11 @@ const StaticFlow = () => {
           Without Cache: 每次都要重算<span className="font-bold text-red-600">全部 {(SEQ+1)*(SEQ+1)}</span> 个 Scores
         </p>
       </div>
+      )}
 
       {/* 效率对比总结 */}
-      <div className="p-4 bg-gradient-to-r from-red-50 via-white to-emerald-50 rounded-xl border border-gray-200">
+      {phase === 3 && (
+      <div className="p-4 mt-4 bg-gradient-to-r from-red-50 via-white to-emerald-50 rounded-xl border border-gray-200">
         <div className="flex justify-center items-center gap-6 text-sm flex-wrap">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-red-500"></div>
@@ -619,6 +653,7 @@ const StaticFlow = () => {
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 };
@@ -643,8 +678,22 @@ const StepCard = ({ title, description, children }) => (
 // --- Main Application ---
 
 export default function BlockVisualizer() {
-  const [mode, setMode] = useState('compare'); // 'compare' | 'prefill' | 'decoding'
+  const [mode, setMode] = useState('compare'); // 'compare' | 'prefill' | 'decoding' | 'nocache'
+  const [phase, setPhase] = useState(1); // 1 | 2 | 3
   const [step, setStep] = useState(0);
+  const [autoPlay, setAutoPlay] = useState(false);
+  const autoPlayRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const goToDetail = (type) => {
+    setMode(type);
+    setStep(0);
+    setAutoPlay(false);
+  };
+
+  const backToOverview = () => {
+    setMode('compare');
+    setAutoPlay(false);
+  };
 
   // Constants - 与 StaticFlow 保持一致
   const PREFILL_TOKENS = ['我', '爱', '机器', '学习'];
@@ -697,24 +746,50 @@ export default function BlockVisualizer() {
       )
     },
     {
-      title: "3. 注意力分数 (Attention Scores)",
-      desc: `Q × K^T 得到 [${SEQ}, ${SEQ}] 的注意力分数矩阵。这是 Prefill 计算量大的原因。`,
+      title: "3. 计算原始分数 (Raw Scores)",
+      desc: `Q × K^T 得到 [${SEQ}, ${SEQ}] 的原始注意力分数矩阵`,
       render: () => (
         <div className="flex items-center gap-2">
           <BlockGrid rows={SEQ} cols={D_K} color="red" label="Qⁱ" subLabel={`[${SEQ}, ${D_K}]`} active />
           <Operator symbol="×" />
           <BlockGrid rows={D_K} cols={SEQ} color="blue" label="Kⁱᵀ" subLabel={`[${D_K}, ${SEQ}]`} active />
           <Operator symbol="=" />
-          <ScoresWithMask size={SEQ} label="Scoresⁱ" subLabel={`[${SEQ}, ${SEQ}]`} />
+          <BlockGrid rows={SEQ} cols={SEQ} color="yellow" label="Raw Scores" subLabel={`[${SEQ}, ${SEQ}]`} active />
         </div>
       )
     },
     {
-      title: "4. 加权求和 (Weighted Sum)",
-      desc: "Softmax(Scores) × V 得到每个头的输出",
+      title: "4. 应用 Causal Mask",
+      desc: "将右上角（未来位置）设为 -∞，确保每个 token 只能看到自己和之前的 token",
       render: () => (
         <div className="flex items-center gap-2">
-          <ScoresWithMask size={SEQ} label="Scoresⁱ" subLabel={`[${SEQ}, ${SEQ}]`} />
+          <BlockGrid rows={SEQ} cols={SEQ} color="yellow" label="Raw Scores" subLabel={`[${SEQ}, ${SEQ}]`} active />
+          <Operator symbol="+" />
+          <CausalMaskGrid size={SEQ} label="Causal Mask" subLabel="0 / -∞" />
+          <Operator symbol="=" />
+          <ScoresWithMask size={SEQ} label="Masked Scores" subLabel={`[${SEQ}, ${SEQ}]`} />
+        </div>
+      )
+    },
+    {
+      title: "5. Softmax 归一化",
+      desc: "对每行做 Softmax，-∞ 位置变为 0，得到注意力权重",
+      render: () => (
+        <div className="flex items-center gap-2">
+          <ScoresWithMask size={SEQ} label="Masked Scores" subLabel={`[${SEQ}, ${SEQ}]`} />
+          <Operator symbol="→" />
+          <div className="text-sm font-mono bg-gray-100 px-2 py-1 rounded">Softmax</div>
+          <Operator symbol="→" />
+          <ScoresWithMask size={SEQ} label="Attention Weights" subLabel="每行和=1" />
+        </div>
+      )
+    },
+    {
+      title: "6. 加权求和 (Weighted Sum)",
+      desc: "Attention Weights × V 得到每个头的输出",
+      render: () => (
+        <div className="flex items-center gap-2">
+          <ScoresWithMask size={SEQ} label="Weights" subLabel={`[${SEQ}, ${SEQ}]`} />
           <Operator symbol="×" />
           <BlockGrid rows={SEQ} cols={D_K} color="green" label="Vⁱ" subLabel={`[${SEQ}, ${D_K}]`} active />
           <Operator symbol="=" />
@@ -723,7 +798,7 @@ export default function BlockVisualizer() {
       )
     },
     {
-      title: "5. 多头拼接 + 输出投影 (Concat + Output Projection)",
+      title: "7. 多头拼接 + 输出投影 (Concat + Output Projection)",
       desc: `${N_HEADS} 个头拼接后通过 Wo 投影回 D_model=${D_MODEL}`,
       render: () => (
         <div className="flex items-center gap-2">
@@ -833,7 +908,108 @@ export default function BlockVisualizer() {
     }
   ];
 
-  const currentSteps = mode === 'prefill' ? prefillSteps : decodingSteps;
+  const nocacheSteps = [
+    {
+      title: "1. 完整输入",
+      desc: `每次都需要输入完整序列 [L+1, D_model]，包括所有历史 token`,
+      render: () => (
+        <TokenInput tokens={[...PREFILL_TOKENS, DECODE_TOKEN]} cols={D_MODEL} label="Full Input" subLabel={`[${SEQ+1}, ${D_MODEL}]`} highlightLastRow />
+      )
+    },
+    {
+      title: "2. 线性投影",
+      desc: `完整输入乘以 Wq、Wk、Wv，得到完整的 Q、K、V`,
+      render: () => (
+        <div className="flex items-center gap-3">
+          <TokenInput tokens={[...PREFILL_TOKENS, DECODE_TOKEN]} cols={D_MODEL} label="Full Input" subLabel={`[${SEQ+1}, ${D_MODEL}]`} highlightLastRow />
+          <Operator symbol="×" />
+          <div className="relative flex flex-col gap-3 p-3 pt-6 bg-gray-50 rounded-lg border border-gray-200 mt-3 overflow-visible">
+            <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-gray-500 text-white text-[9px] px-2 py-0.5 rounded-full font-bold whitespace-nowrap z-10">Head i</div>
+            <div className="p-1.5 bg-rose-50 rounded border border-rose-200">
+              <BlockGrid rows={D_MODEL} cols={D_K} color="red" label="Wqⁱ" subLabel="" active />
+            </div>
+            <div className="p-1.5 bg-sky-50 rounded border border-sky-200">
+              <BlockGrid rows={D_MODEL} cols={D_K} color="blue" label="Wkⁱ" subLabel="" active />
+            </div>
+            <div className="p-1.5 bg-emerald-50 rounded border border-emerald-200">
+              <BlockGrid rows={D_MODEL} cols={D_K} color="green" label="Wvⁱ" subLabel="" active />
+            </div>
+          </div>
+          <Operator symbol="=" />
+          <div className="flex flex-col gap-4">
+            <BlockGridWithHighlight rows={SEQ+1} cols={D_K} color="red" label="Qⁱ" subLabel={`[${SEQ+1}, ${D_K}]`} />
+            <BlockGridWithHighlight rows={SEQ+1} cols={D_K} color="blue" label="Kⁱ" subLabel={`[${SEQ+1}, ${D_K}]`} />
+            <BlockGridWithHighlight rows={SEQ+1} cols={D_K} color="green" label="Vⁱ" subLabel={`[${SEQ+1}, ${D_K}]`} />
+          </div>
+        </div>
+      )
+    },
+    {
+      title: "3. 计算注意力分数",
+      desc: `Q × K^T 得到 [${SEQ+1}, ${SEQ+1}] 的完整方阵，计算量 O(n²)`,
+      render: () => (
+        <div className="flex items-center gap-2">
+          <BlockGridWithHighlight rows={SEQ+1} cols={D_K} color="red" label="Qⁱ" subLabel={`[${SEQ+1}, ${D_K}]`} />
+          <Operator symbol="×" />
+          <BlockGridWithHighlight rows={D_K} cols={SEQ+1} color="blue" label="Kⁱᵀ" subLabel={`[${D_K}, ${SEQ+1}]`} highlightLastRow={false} highlightLastCol />
+          <Operator symbol="=" />
+          <ScoresWithMask size={SEQ+1} label="Scoresⁱ" subLabel={`[${SEQ+1}, ${SEQ+1}]`} showNew />
+        </div>
+      )
+    },
+    {
+      title: "4. 加权求和",
+      desc: `Scores × V 得到输出，每次都要重算全部 ${(SEQ+1)*(SEQ+1)} 个元素`,
+      render: () => (
+        <div className="flex items-center gap-2">
+          <ScoresWithMask size={SEQ+1} label="Scoresⁱ" subLabel={`[${SEQ+1}, ${SEQ+1}]`} showNew />
+          <Operator symbol="×" />
+          <BlockGridWithHighlight rows={SEQ+1} cols={D_K} color="green" label="Vⁱ" subLabel={`[${SEQ+1}, ${D_K}]`} />
+          <Operator symbol="=" />
+          <BlockGridWithHighlight rows={SEQ+1} cols={D_K} color="purple" label="Headⁱ" subLabel={`[${SEQ+1}, ${D_K}]`} />
+        </div>
+      )
+    },
+    {
+      title: "5. 多头拼接 + 输出投影",
+      desc: `${N_HEADS} 个头拼接后通过 Wo 投影，输出完整序列`,
+      render: () => (
+        <div className="flex items-center gap-2">
+          <div className="relative flex gap-1 p-2 pt-4 bg-purple-50 rounded-lg border border-purple-200">
+            <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-purple-500 text-white text-[9px] px-2 py-0.5 rounded-full font-bold whitespace-nowrap">Concat</div>
+            <BlockGridWithHighlight rows={SEQ+1} cols={D_K} color="purple" label="H1" subLabel="" />
+            <BlockGridWithHighlight rows={SEQ+1} cols={D_K} color="purple" label="H2" subLabel="" />
+          </div>
+          <Operator symbol="×" />
+          <div className="p-1.5 bg-gray-100 rounded border border-gray-300">
+            <BlockGrid rows={D_MODEL} cols={D_MODEL} color="gray" label="Wo" subLabel={`[${D_MODEL}, ${D_MODEL}]`} active />
+          </div>
+          <Operator symbol="=" />
+          <BlockGridWithHighlight rows={SEQ+1} cols={D_MODEL} color="purple" label="Output" subLabel={`[${SEQ+1}, ${D_MODEL}]`} />
+        </div>
+      )
+    }
+  ];
+
+  const currentSteps = mode === 'prefill' ? prefillSteps : mode === 'decoding' ? decodingSteps : nocacheSteps;
+
+  // Auto play logic
+  useEffect(() => {
+    if (autoPlay && mode !== 'compare') {
+      autoPlayRef.current = setInterval(() => {
+        setStep(prev => {
+          if (prev >= currentSteps.length - 1) {
+            setAutoPlay(false);
+            return prev;
+          }
+          return prev + 1;
+        });
+      }, 2000);
+    }
+    return () => {
+      if (autoPlayRef.current) clearInterval(autoPlayRef.current);
+    };
+  }, [autoPlay, mode, currentSteps.length]);
 
   return (
     <div className="min-h-screen font-sans px-4 py-6">
@@ -846,45 +1022,95 @@ export default function BlockVisualizer() {
         </header>
 
         {/* Navigation */}
-        <div className="flex justify-center gap-4 mb-8">
-          <button 
-            onClick={() => setMode('compare')}
-            className={`flex items-center gap-2 px-5 py-2 rounded-full text-sm font-bold transition-all ${mode === 'compare' ? 'bg-gray-800 text-white shadow-lg' : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'}`}
-          >
-            <Layers size={16} /> 全流程视图
-          </button>
-          <button 
-            onClick={() => { setMode('prefill'); setStep(0); }}
-            className={`flex items-center gap-2 px-5 py-2 rounded-full text-sm font-bold transition-all ${mode === 'prefill' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'}`}
-          >
-            <Play size={16} /> Prefill 细节
-          </button>
-          <button 
-            onClick={() => { setMode('decoding'); setStep(0); }}
-            className={`flex items-center gap-2 px-5 py-2 rounded-full text-sm font-bold transition-all ${mode === 'decoding' ? 'bg-amber-500 text-white shadow-lg' : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'}`}
-          >
-            <Cpu size={16} /> Decoding 细节
-          </button>
+        <div className="flex justify-center gap-2 mb-8">
+          {mode === 'compare' ? (
+            <>
+              <button 
+                onClick={() => setPhase(1)}
+                className={`flex items-center gap-2 px-5 py-2 rounded-full text-sm font-bold transition-all ${phase === 1 ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'}`}
+              >
+                阶段1: Prefill
+              </button>
+              <button 
+                onClick={() => setPhase(2)}
+                className={`flex items-center gap-2 px-5 py-2 rounded-full text-sm font-bold transition-all ${phase === 2 ? 'bg-amber-500 text-white shadow-lg' : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'}`}
+              >
+                阶段2: Decoding
+              </button>
+              <button 
+                onClick={() => setPhase(3)}
+                className={`flex items-center gap-2 px-5 py-2 rounded-full text-sm font-bold transition-all ${phase === 3 ? 'bg-red-500 text-white shadow-lg' : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'}`}
+              >
+                Decoding (No Cache)
+              </button>
+            </>
+          ) : (
+            <div className={`px-5 py-2 rounded-full text-sm font-bold ${mode === 'prefill' ? 'bg-indigo-600 text-white' : mode === 'decoding' ? 'bg-amber-500 text-white' : 'bg-red-500 text-white'}`}>
+              {mode === 'prefill' ? 'Prefill 细节' : mode === 'decoding' ? 'Decoding 细节' : 'No Cache 细节'}
+            </div>
+          )}
         </div>
 
         {/* Content Area */}
         <div className="flex justify-center">
           {mode === 'compare' ? (
              <motion.div 
-                initial={{ opacity: 0 }} 
-                animate={{ opacity: 1 }} 
+                key={phase}
+                initial={{ opacity: 0, y: 10 }} 
+                animate={{ opacity: 1, y: 0 }} 
                 className="w-full"
              >
-                <StaticFlow />
+                <StaticFlow 
+                  phase={phase}
+                  onShowPrefillDetail={() => goToDetail('prefill')} 
+                  onShowDecodingDetail={() => goToDetail('decoding')}
+                  onShowNocacheDetail={() => goToDetail('nocache')} 
+                />
              </motion.div>
           ) : (
             <div className="w-full flex flex-col items-center">
+                {/* Top bar: Back button + Step controls */}
+                <div className="w-full max-w-6xl flex justify-between items-center mb-4">
+                  <button 
+                    onClick={backToOverview}
+                    className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                  >
+                    ← 返回全流程视图
+                  </button>
+                  
+                  {/* Step Controls */}
+                  <div className="flex gap-3">
+                    <button 
+                        onClick={() => { setAutoPlay(!autoPlay); if (!autoPlay && step === currentSteps.length - 1) setStep(0); }}
+                        className={`px-4 py-2 rounded-lg border font-medium text-sm flex items-center gap-2 ${autoPlay ? 'border-orange-400 bg-orange-50 text-orange-600' : 'border-gray-300 hover:bg-gray-50'}`}
+                    >
+                        {autoPlay ? <Pause size={16}/> : <Play size={16}/>}
+                        {autoPlay ? '暂停' : '自动'}
+                    </button>
+                    <button 
+                        onClick={() => setStep(Math.max(0, step - 1))}
+                        disabled={step === 0 || autoPlay}
+                        className="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 text-sm font-medium"
+                    >
+                        上一步
+                    </button>
+                    <button 
+                        onClick={() => setStep(Math.min(currentSteps.length - 1, step + 1))}
+                        disabled={step === currentSteps.length - 1 || autoPlay}
+                        className={`px-5 py-2 rounded-lg text-white font-medium shadow-md transition-transform active:scale-95 disabled:opacity-50 disabled:scale-100 flex items-center gap-2 ${mode === 'prefill' ? 'bg-indigo-600 hover:bg-indigo-700' : mode === 'decoding' ? 'bg-amber-500 hover:bg-amber-600' : 'bg-red-500 hover:bg-red-600'}`}
+                    >
+                        {step === currentSteps.length - 1 ? <CheckCircle2 size={16}/> : <SkipForward size={16}/>}
+                        {step === currentSteps.length - 1 ? '完成' : '下一步'}
+                    </button>
+                  </div>
+                </div>
+
                 {/* Step Progress */}
                 <div className="flex gap-2 mb-6">
                     {currentSteps.map((_, idx) => (
                         <div 
                             key={idx} 
-                            className={`h-1.5 w-8 rounded-full transition-colors ${idx === step ? (mode === 'prefill' ? 'bg-indigo-600' : 'bg-amber-500') : 'bg-gray-200'}`} 
+                            className={`h-1.5 w-8 rounded-full transition-colors ${idx === step ? (mode === 'prefill' ? 'bg-indigo-600' : mode === 'decoding' ? 'bg-amber-500' : 'bg-red-500') : 'bg-gray-200'}`} 
                         />
                     ))}
                 </div>
@@ -896,25 +1122,6 @@ export default function BlockVisualizer() {
                 >
                     {currentSteps[step].render()}
                 </StepCard>
-
-                {/* Controls */}
-                <div className="flex gap-4 mt-8">
-                    <button 
-                        onClick={() => setStep(Math.max(0, step - 1))}
-                        disabled={step === 0}
-                        className="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 text-sm font-medium"
-                    >
-                        上一步
-                    </button>
-                    <button 
-                        onClick={() => setStep(Math.min(currentSteps.length - 1, step + 1))}
-                        disabled={step === currentSteps.length - 1}
-                        className={`px-6 py-2 rounded-lg text-white font-medium shadow-md transition-transform active:scale-95 disabled:opacity-50 disabled:scale-100 flex items-center gap-2 ${mode === 'prefill' ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-amber-500 hover:bg-amber-600'}`}
-                    >
-                        {step === currentSteps.length - 1 ? <CheckCircle2 size={16}/> : <SkipForward size={16}/>}
-                        {step === currentSteps.length - 1 ? '完成' : '下一步'}
-                    </button>
-                </div>
             </div>
           )}
         </div>
