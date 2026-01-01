@@ -393,11 +393,11 @@ const SectionLabel = ({ title, color, onDetail }) => (
 
 // --- Main Static Flow Component ---
 const StaticFlow = ({ phase, onShowPrefillDetail, onShowDecodingDetail, onShowNocacheDetail }) => {
-  const PREFILL_TOKENS = ['我', '爱', '机器', '学习'];
+  const PREFILL_TOKENS = ['别', '偷着', '学了', '带带', '我', '啊'];
   const DECODE_TOKEN = '！';
   const SEQ = PREFILL_TOKENS.length;
-  const D_K = 3;  // 每头的维度
-  const D_MODEL = 6; // 输入维度
+  const D_K = 2;  // 每头的维度
+  const D_MODEL = 4; // 输入维度
   const N_HEADS = 2; // 头数 (D_MODEL / D_K)
   
   return (
@@ -696,11 +696,11 @@ export default function BlockVisualizer() {
   };
 
   // Constants - 与 StaticFlow 保持一致
-  const PREFILL_TOKENS = ['我', '爱', '机器', '学习'];
+  const PREFILL_TOKENS = ['别', '偷着', '学了', '带带', '我', '啊'];
   const DECODE_TOKEN = '！';
   const SEQ = PREFILL_TOKENS.length;
-  const D_K = 3;
-  const D_MODEL = 6;
+  const D_K = 2;
+  const D_MODEL = 4;
   const N_HEADS = 2;
 
   const prefillSteps = [
